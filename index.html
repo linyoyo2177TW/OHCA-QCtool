@@ -603,20 +603,20 @@ const v1Events = [
   { row: 13, label: '第一次 ROSC' },
 ];
 
-// 👇 這裡修正：將 V2、V3、Zoll 共 6 個事件全部加入 isInput 標記
+/// 👇 這裡修正：將 V2、V3、Zoll 共 6 個事件全部加入 isInput 標記
 const v2Events = [
-  { row: 16, label: '到院換床（V2）', isInput: true },
+  { row: 16, label: '請自行輸入事件時間點', isInput: true },
 ];
 
 const v3Events = [
-  { row: 23, label: '事件 1（V3）', isInput: true },
-  { row: 24, label: '事件 2（V3）', isInput: true },
+  { row: 23, label: '請自行輸入事件時間點', isInput: true },
+  { row: 24, label: '請自行輸入事件時間點', isInput: true },
 ];
 
 const zollEvents = [
-  { row: 32, label: 'Pad off 的時間點', isInput: true },
-  { row: 33, label: '到院換床', isInput: true },
-  { row: 34, label: '其他事件', isInput: true },
+  { row: 32, label: '請自行輸入事件時間點', isInput: true },
+  { row: 33, label: '請自行輸入事件時間點', isInput: true },
+  { row: 34, label: '請自行輸入事件時間點', isInput: true },
 ];
 
 // 👇 這裡修正：重構 HTML 產生器，讓擁有 isInput 標記的項目自動轉為 10 字輸入框
