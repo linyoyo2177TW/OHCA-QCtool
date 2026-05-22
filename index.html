@@ -605,18 +605,18 @@ const v1Events = [
 
 // 👇 這裡修正：將 V2、V3、Zoll 共 6 個事件全部加入 isInput 標記
 const v2Events = [
-  { row: 16, label: '自行輸入事件時間點', isInput: true },
+  { row: 16, label: '到院換床（V2）', isInput: true },
 ];
 
 const v3Events = [
-  { row: 23, label: '自行輸入事件時間點', isInput: true },
-  { row: 24, label: '自行輸入事件時間點', isInput: true },
+  { row: 23, label: '事件 1（V3）', isInput: true },
+  { row: 24, label: '事件 2（V3）', isInput: true },
 ];
 
 const zollEvents = [
-  { row: 32, label: '自行輸入事件時間點', isInput: true },
-  { row: 33, label: '自行輸入事件時間點', isInput: true },
-  { row: 34, label: '自行輸入事件時間點', isInput: true },
+  { row: 32, label: 'Pad off 的時間點', isInput: true },
+  { row: 33, label: '到院換床', isInput: true },
+  { row: 34, label: '其他事件', isInput: true },
 ];
 
 // 👇 這裡修正：重構 HTML 產生器，讓擁有 isInput 標記的項目自動轉為 10 字輸入框
@@ -1021,115 +1021,334 @@ function showToast(msg) {
 }
 
 /* =====================================================================
-   匯出為 PNG（SVG foreignObject + Canvas，無外部依賴）
+   匯出為 PNG — 直接用 Canvas 2D API 繪製
+   （避開 file:// 環境下 SVG foreignObject 會汙染 canvas 的問題）
    ===================================================================== */
 async function captureToPng() {
   const btn = document.getElementById('savePngBtn');
   const origText = btn.textContent;
   btn.textContent = '⏳ 產生中...'; btn.disabled = true;
 
-  const originallyClosed = [];
-  const restoreClosed = () => originallyClosed.forEach(d => d.open = false);
-
   try {
-    const target = document.querySelector('main');
+    const dpr = 2;
+    const W = 1100;
+    const PAD = 30;
+    const innerW = W - PAD * 2;
+    const FONT = '"PingFang TC", "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, sans-serif';
+    const FONTMONO = 'ui-monospace, Menlo, Consolas, monospace';
+    const COL = {
+      bg: '#f5f6f8', card: '#ffffff', border: '#e1e4ea',
+      title: '#2563eb',
+      text: '#1f2329', muted: '#6b7280',
+      result: '#047857', resultBg: '#ecfdf5',
+      neg: '#b91c1c',
+      crossday: '#fef3c7', crossdayText: '#92400e',
+    };
 
-    // 1. 強制展開所有 <details>
-    target.querySelectorAll('details').forEach(d => {
-      if (!d.open) { originallyClosed.push(d); d.open = true; }
-    });
-    await new Promise(r => requestAnimationFrame(r));
-    await new Promise(r => setTimeout(r, 50));
+    // 預估高度
+    const H = {
+      header: 70,
+      v1: 38 + 70 + 10 * 28 + 16,
+      v2: 38 + 70 + 1 * 28 + 16,
+      v3: 38 + 70 + 2 * 28 + 16,
+      zoll: 38 + 70 + 3 * 28 + 16,
+      tic: 38 + 3 * 28 + 16 + 3 * 28 + 16,
+      paste: 38 + 30 + 36 + 24 + 30 + 36 + 16,
+    };
+    const GAP = 14;
+    const totalH = PAD * 2 + H.header +
+      H.v1 + GAP + H.v2 + GAP + H.v3 + GAP + H.zoll + GAP + H.tic + GAP + H.paste;
 
-    // 2. 把當前 input value 寫回 attribute（cloneNode 不會帶 value 屬性）
-    target.querySelectorAll('input').forEach(el => {
-      if (el.type === 'checkbox' || el.type === 'radio') {
-        if (el.checked) el.setAttribute('checked', ''); else el.removeAttribute('checked');
+    const canvas = document.createElement('canvas');
+    canvas.width = W * dpr;
+    canvas.height = totalH * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.textBaseline = 'top';
+
+    // 工具
+    const fnt = (size, weight, mono) =>
+      ctx.font = (weight ? weight + ' ' : '') + size + 'px ' + (mono ? FONTMONO : FONT);
+    const txt = (s, x, y, color, align) => {
+      ctx.fillStyle = color || COL.text;
+      ctx.textAlign = align || 'left';
+      ctx.fillText(s == null ? '' : String(s), x, y);
+    };
+    const rectFill = (color, x, y, w, h) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); };
+    function roundRect(fillC, strokeC, x, y, w, h, r) {
+      const rr = Math.min(r || 0, w/2, h/2);
+      ctx.beginPath();
+      if (rr === 0) {
+        ctx.rect(x, y, w, h);
       } else {
-        el.setAttribute('value', el.value || '');
+        ctx.moveTo(x + rr, y);
+        ctx.lineTo(x + w - rr, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+        ctx.lineTo(x + w, y + h - rr);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+        ctx.lineTo(x + rr, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+        ctx.lineTo(x, y + rr);
+        ctx.quadraticCurveTo(x, y, x + rr, y);
+        ctx.closePath();
       }
-    });
-    // select 的 value 也要處理
-    target.querySelectorAll('select').forEach(sel => {
-      Array.from(sel.options).forEach(opt => {
-        if (opt.selected) opt.setAttribute('selected', '');
-        else opt.removeAttribute('selected');
-      });
-    });
-
-    const rect = target.getBoundingClientRect();
-    const w = Math.ceil(rect.width);
-    const h = Math.ceil(target.scrollHeight);
-
-    if (w === 0 || h === 0) throw new Error('內容尺寸為 0');
-
-    // 3. 收集所有 <style>
-    const styleText = Array.from(document.querySelectorAll('style'))
-      .map(s => s.textContent).join('\n');
-
-    // 4. 用 DOM API 建立 SVG（XMLSerializer 會輸出合法 XML）
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const xhtmlNS = 'http://www.w3.org/1999/xhtml';
-
-    const svgEl = document.createElementNS(svgNS, 'svg');
-    svgEl.setAttribute('width', String(w));
-    svgEl.setAttribute('height', String(h));
-    svgEl.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-
-    const foEl = document.createElementNS(svgNS, 'foreignObject');
-    foEl.setAttribute('x', '0');
-    foEl.setAttribute('y', '0');
-    foEl.setAttribute('width', String(w));
-    foEl.setAttribute('height', String(h));
-
-    const wrapperDiv = document.createElementNS(xhtmlNS, 'div');
-    wrapperDiv.setAttribute('style', 'width:' + w + 'px; background:#f5f6f8; box-sizing:border-box;');
-
-    const styleEl = document.createElementNS(xhtmlNS, 'style');
-    // 用 CDATA 包住 CSS 避免特殊字元出問題
-    styleEl.appendChild(document.createTextNode(styleText));
-    wrapperDiv.appendChild(styleEl);
-
-    // 把 main 的 clone 直接 append 到 wrapper（會被 XMLSerializer 正確序列化）
-    const clone = target.cloneNode(true);
-    wrapperDiv.appendChild(clone);
-
-    foEl.appendChild(wrapperDiv);
-    svgEl.appendChild(foEl);
-
-    // 用 XMLSerializer 輸出合法的 XML
-    const svgStr = new XMLSerializer().serializeToString(svgEl);
-
-    // 5. 轉成 Image
-    const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-    const svgUrl = URL.createObjectURL(svgBlob);
-
-    let img;
-    try {
-      img = await new Promise((resolve, reject) => {
-        const i = new Image();
-        i.onload = () => resolve(i);
-        i.onerror = () => reject(new Error('SVG 載入失敗，請打開瀏覽器主控台看詳細錯誤'));
-        i.src = svgUrl;
-      });
-    } finally {
-      URL.revokeObjectURL(svgUrl);
+      if (fillC) { ctx.fillStyle = fillC; ctx.fill(); }
+      if (strokeC) { ctx.strokeStyle = strokeC; ctx.lineWidth = 1; ctx.stroke(); }
+    }
+    function pill(text, x, y, bg, fg, h) {
+      fnt(11, '600');
+      const padX = 6;
+      const w = ctx.measureText(text).width + padX * 2;
+      roundRect(bg, null, x, y, w, h, 4);
+      txt(text, x + padX, y + (h - 11) / 2 - 1, fg);
+      return w;
+    }
+    function fmtTime(sec) {
+      if (sec == null || isNaN(sec)) return '—';
+      const v = ((sec % 86400) + 86400) % 86400;
+      return String(Math.floor(v/3600)).padStart(2,'0') + ':' +
+             String(Math.floor((v%3600)/60)).padStart(2,'0') + ':' +
+             String(Math.round(v)%60).padStart(2,'0');
+    }
+    function fmtRestored(rawSec) {
+      if (rawSec == null) return { tag: null, time: '—' };
+      const day = Math.floor(rawSec / 86400);
+      const time = fmtTime(rawSec);
+      let tag = null;
+      if (day === 1) tag = '隔日';
+      else if (day === -1) tag = '前日';
+      else if (day !== 0) tag = (day > 0 ? '+' : '') + day + '日';
+      return { tag, time };
+    }
+    function drawCardBg(yTop, h, title) {
+      roundRect(COL.card, COL.border, PAD, yTop, innerW, h, 10);
+      fnt(15, '600');
+      txt(title, PAD + 18, yTop + 14, COL.title);
+    }
+    function drawAnchor(yBase, label1, tv1, label2, tv2, diffLabel, diffSec) {
+      const x = PAD + 16, w = innerW - 32, h = 60;
+      roundRect('#eff4ff', null, x, yBase, w, h, 8);
+      const colW = (w - 24) / 3;
+      // B
+      fnt(11);
+      txt(label1, x + 12, yBase + 8, COL.muted);
+      fnt(15, '', true);
+      txt(fmtTime(tv1 ? tv1.parsedSec : null), x + 12, yBase + 24, COL.text);
+      if (tv1 && tv1.crossDay) pill('跨日', x + 12, yBase + 42, COL.crossday, COL.crossdayText, 14);
+      // C
+      fnt(11);
+      txt(label2, x + 12 + colW, yBase + 8, COL.muted);
+      fnt(15, '', true);
+      txt(fmtTime(tv2 ? tv2.parsedSec : null), x + 12 + colW, yBase + 24, COL.text);
+      if (tv2 && tv2.crossDay) pill('跨日', x + 12 + colW, yBase + 42, COL.crossday, COL.crossdayText, 14);
+      // D
+      fnt(11);
+      txt(diffLabel, x + 12 + colW * 2, yBase + 8, COL.muted);
+      const diffStr = diffSec == null ? '—' : (diffSec >= 0 ? '+' : '') + diffSec + ' 秒';
+      fnt(18, '600', true);
+      txt(diffStr, x + 12 + colW * 2, yBase + 22, diffSec != null && diffSec < 0 ? COL.neg : COL.title);
+    }
+    function drawEventRow(yBase, label, videoSec, restoredRaw) {
+      const x = PAD + 16, w = innerW - 32;
+      rectFill(COL.border, x, yBase + 27, w, 1);
+      fnt(13);
+      txt(label, x + 6, yBase + 6, COL.text);
+      fnt(13, '', true);
+      txt(fmtTime(videoSec), x + w * 0.45 + 6, yBase + 6, COL.text);
+      const r = fmtRestored(restoredRaw);
+      const rx = x + w * 0.72 + 6;
+      const rw = w * 0.28 - 12;
+      if (r.time === '—') {
+        roundRect('#f3f4f6', null, rx, yBase + 4, rw, 22, 4);
+        fnt(13, '', true);
+        txt('—', rx + rw/2, yBase + 6, COL.muted, 'center');
+      } else {
+        roundRect(COL.resultBg, null, rx, yBase + 4, rw, 22, 4);
+        if (r.tag) {
+          const tagW = pill(r.tag, rx + 4, yBase + 6, COL.crossday, COL.crossdayText, 18);
+          fnt(13, '', true);
+          txt(r.time, rx + 4 + tagW + 6, yBase + 8, COL.result);
+        } else {
+          fnt(13, '', true);
+          txt(r.time, rx + rw/2, yBase + 6, COL.result, 'center');
+        }
+      }
     }
 
-    // 6. 畫到 canvas（2x 解析度）
-    const scale = 2;
-    const canvas = document.createElement('canvas');
-    canvas.width = w * scale;
-    canvas.height = h * scale;
-    const ctx = canvas.getContext('2d');
-    ctx.scale(scale, scale);
-    ctx.fillStyle = '#f5f6f8';
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(img, 0, 0, w, h);
+    // 背景
+    rectFill(COL.bg, 0, 0, W, totalH);
 
-    restoreClosed();
+    let y = PAD;
+    // Header
+    fnt(20, 'bold');
+    txt('救護品管 — 影片／AED 時間校正', PAD, y);
+    y += 28;
+    fnt(11);
+    txt('產出時間：' + new Date().toLocaleString('zh-TW'), PAD, y, COL.muted);
+    y += 32;
 
-    // 7. 下載
+    // V1
+    drawCardBg(y, H.v1, '① V1 校正（以 AED 為基準）');
+    let cy = y + 44;
+    const b3v = readClockTime('b3'), c3v = readClockTime('c3');
+    const d3v = (b3v.sec !== null && c3v.sec !== null) ? (c3v.sec - b3v.sec) : null;
+    drawAnchor(cy, '當下 AED 時間 (B3)', b3v, '當下 Video1 時間 (C3)', c3v, '時差 D3', d3v);
+    cy += 70;
+    for (const ev of v1Events) {
+      const cv = readClockTime('c' + ev.row);
+      const restored = (d3v !== null && cv.sec !== null) ? (cv.sec - d3v) : null;
+      drawEventRow(cy, ev.label, cv.parsedSec, restored);
+      cy += 28;
+    }
+    y += H.v1 + GAP;
+
+    // V2
+    drawCardBg(y, H.v2, '② V2 校正（用 V1 當參考基準）');
+    cy = y + 44;
+    const b15v = readClockTime('b15'), c15v = readClockTime('c15');
+    const d15v = (b15v.sec !== null && c15v.sec !== null) ? (c15v.sec - b15v.sec) : null;
+    drawAnchor(cy, '當下 V1 時間 (B15)', b15v, '當下 V2 時間 (C15)', c15v, '時差 D15', d15v);
+    cy += 70;
+    for (const ev of v2Events) {
+      const cv = readClockTime('c' + ev.row);
+      const total = (d15v !== null && d3v !== null) ? d15v + d3v : null;
+      const restored = (total !== null && cv.sec !== null) ? (cv.sec - total) : null;
+      drawEventRow(cy, ev.label, cv.parsedSec, restored);
+      cy += 28;
+    }
+    y += H.v2 + GAP;
+
+    // V3
+    drawCardBg(y, H.v3, '③ V3 校正（用 V1 當參考基準）');
+    cy = y + 44;
+    const b22v = readClockTime('b22'), c22v = readClockTime('c22');
+    const d22v = (b22v.sec !== null && c22v.sec !== null) ? (c22v.sec - b22v.sec) : null;
+    drawAnchor(cy, '當下 V1 時間 (B22)', b22v, '當下 V3 時間 (C22)', c22v, '時差 D22 (參考)', d22v);
+    cy += 70;
+    for (const ev of v3Events) {
+      const cv = readClockTime('c' + ev.row);
+      const total = (d15v !== null && d3v !== null) ? d15v + d3v : null;
+      const restored = (total !== null && cv.sec !== null) ? (cv.sec - total) : null;
+      drawEventRow(cy, ev.label, cv.parsedSec, restored);
+      cy += 28;
+    }
+    y += H.v3 + GAP;
+
+    // Zoll
+    drawCardBg(y, H.zoll, '④ Zoll X 置換（以 AED 為基準）');
+    cy = y + 44;
+    const b31v = readClockTime('b31'), c31v = readClockTime('c31');
+    const d31v = (b31v.sec !== null && c31v.sec !== null) ? (c31v.sec - b31v.sec) : null;
+    drawAnchor(cy, '當下 AED 時間 (B31)', b31v, '當下 Zoll X 時間 (C31)', c31v, '時差 D31', d31v);
+    cy += 70;
+    for (const ev of zollEvents) {
+      const cv = readClockTime('c' + ev.row);
+      const restored = (d31v !== null && cv.sec !== null) ? (cv.sec - d31v) : null;
+      drawEventRow(cy, ev.label, cv.parsedSec, restored);
+      cy += 28;
+    }
+    y += H.zoll + GAP;
+
+    // Time in compressions
+    drawCardBg(y, H.tic, '⑤ Time in compressions');
+    cy = y + 44;
+    const oa = readDur('cpr_ohca_aed'), ab = readDur('airway_break'), mb = readDur('mcpr_break');
+    const inputs = [
+      ['① 判定 OHCA → 貼上 AED 區間 CPR 總秒數', oa],
+      ['② 呼吸道建立中斷 CPR 秒數 (3-18)', ab],
+      ['③ 裝 MCPR 中斷 CPR 秒數 (3-9)', mb],
+    ];
+    for (const [lbl, v] of inputs) {
+      fnt(13);
+      txt(lbl, PAD + 16, cy + 6, COL.text);
+      const valStr = v == null ? '—' : v + ' 秒';
+      roundRect(COL.resultBg, null, PAD + innerW - 200, cy + 2, 180, 22, 4);
+      fnt(13, '', true);
+      txt(valStr, PAD + innerW - 110, cy + 6, COL.result, 'center');
+      cy += 28;
+    }
+    cy += 8;
+    rectFill(COL.border, PAD + 16, cy, innerW - 32, 1);
+    cy += 10;
+    const c11v = readClockTime('c11'), c7v = readClockTime('c7'), c12v = readClockTime('c12');
+    const aedMcpr = (c11v.sec !== null && c7v.sec !== null) ?
+      (c11v.sec - c7v.sec) - (ab || 0) - (mb || 0) : null;
+    const aedEnd = (c12v.sec !== null && c7v.sec !== null) ?
+      (c12v.sec - c7v.sec) - (ab || 0) : null;
+    const results = [
+      ['Time in compressions (OHCA→AED)', oa != null ? fmtTime(oa) : '—'],
+      ['Time in compressions (貼AED→MCPR, 有LUCAS)', aedMcpr != null ? fmtTime(aedMcpr) : '—'],
+      ['Time in compressions (貼AED→事件結束, 沒LUCAS)', aedEnd != null ? fmtTime(aedEnd) : '—'],
+    ];
+    for (const [lbl, val] of results) {
+      fnt(13);
+      txt(lbl, PAD + 16, cy + 6, COL.text);
+      roundRect(COL.resultBg, null, PAD + innerW - 200, cy + 2, 180, 22, 4);
+      fnt(13, '', true);
+      txt(val, PAD + innerW - 110, cy + 6, val === '—' ? COL.muted : COL.result, 'center');
+      cy += 28;
+    }
+    y += H.tic + GAP;
+
+    // 轉貼用 A-R + AC/AE
+    drawCardBg(y, H.paste, '⑥ 轉貼用（A-R + AC/AE）');
+    cy = y + 44;
+    const arCells = getPasteCells();
+    const colLabels = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R'];
+    const cellW = (innerW - 32) / 18;
+    // 標頭
+    for (let i = 0; i < 18; i++) {
+      const cx = PAD + 16 + i * cellW;
+      roundRect('#fafbfc', COL.border, cx, cy, cellW, 30, 0);
+      fnt(11, '600');
+      txt(colLabels[i], cx + cellW/2, cy + 9, COL.muted, 'center');
+    }
+    cy += 30;
+    const manualEmptyIdx = new Set([2, 6, 10, 11, 12, 14, 15]);
+    for (let i = 0; i < 18; i++) {
+      const cx = PAD + 16 + i * cellW;
+      if (manualEmptyIdx.has(i)) {
+        // 灰底斜紋
+        roundRect('#f3f4f6', COL.border, cx, cy, cellW, 36, 0);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(cx + 1, cy + 1, cellW - 2, 34);
+        ctx.clip();
+        ctx.strokeStyle = '#dcdfe4';
+        ctx.lineWidth = 1;
+        for (let k = -40; k < cellW + 40; k += 6) {
+          ctx.beginPath();
+          ctx.moveTo(cx + k, cy);
+          ctx.lineTo(cx + k + 40, cy + 40);
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else {
+        roundRect('#fff', COL.border, cx, cy, cellW, 36, 0);
+        fnt(10.5, '', true);
+        const cellText = arCells[i] || '—';
+        txt(cellText, cx + cellW/2, cy + 12, cellText === '—' ? COL.muted : COL.result, 'center');
+      }
+    }
+    cy += 36 + 14;
+    const ticCells = getTicCells();
+    const acW = (innerW - 32 - 16) / 2;
+    // AC
+    roundRect('#fafbfc', COL.border, PAD + 16, cy, acW, 30, 0);
+    fnt(11, '600');
+    txt('AC: Time in compressions (OHCA→貼AED)', PAD + 16 + acW/2, cy + 9, COL.muted, 'center');
+    roundRect('#fff', COL.border, PAD + 16, cy + 30, acW, 36, 0);
+    fnt(13, '', true);
+    txt(ticCells[0] || '—', PAD + 16 + acW/2, cy + 41, ticCells[0] ? COL.result : COL.muted, 'center');
+    // AE
+    roundRect('#fafbfc', COL.border, PAD + 16 + acW + 16, cy, acW, 30, 0);
+    fnt(11, '600');
+    txt('AE: Time in compressions (貼AED→MCPR)', PAD + 16 + acW + 16 + acW/2, cy + 9, COL.muted, 'center');
+    roundRect('#fff', COL.border, PAD + 16 + acW + 16, cy + 30, acW, 36, 0);
+    fnt(13, '', true);
+    txt(ticCells[1] || '—', PAD + 16 + acW + 16 + acW/2, cy + 41, ticCells[1] ? COL.result : COL.muted, 'center');
+
+    // 下載
     canvas.toBlob(blob => {
       if (!blob) { showToast('產生 PNG 失敗（toBlob 為 null）'); return; }
       const url = URL.createObjectURL(blob);
@@ -1145,11 +1364,7 @@ async function captureToPng() {
     }, 'image/png');
   } catch (err) {
     console.error('PNG export error:', err);
-    restoreClosed();
-    // 失敗時改用列印對話框備援
-    if (confirm('PNG 匯出失敗：' + (err.message || err) + '\n\n要改用瀏覽器列印對話框（可儲存成 PDF/PNG）嗎？')) {
-      window.print();
-    }
+    showToast('儲存失敗：' + (err.message || err));
   } finally {
     btn.textContent = origText;
     btn.disabled = false;
