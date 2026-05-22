@@ -599,30 +599,48 @@ const v1Events = [
   { row: 9,  label: '第一支 Epinephrine' },
   { row: 10, label: '呼吸道建立時間' },
   { row: 11, label: 'MCPR 架設點' },
-  { row: 12, label: 'AED 關機 / AED 拔除 / 到院換床' },
+  { row: 12, label: 'AED 關機 / AED 拔除 / 到院換床' }, // V1 依舊維持靜態文字
   { row: 13, label: '第一次 ROSC' },
 ];
 
+// 👇 這裡修正：將 V2、V3、Zoll 共 6 個事件全部加入 isInput 標記
 const v2Events = [
-  { row: 16, label: '到院換床（V2）' },
+  { row: 16, label: '到院換床（V2）', isInput: true },
 ];
 
 const v3Events = [
-  { row: 23, label: '事件 1（V3）' },
-  { row: 24, label: '事件 2（V3）' },
+  { row: 23, label: '事件 1（V3）', isInput: true },
+  { row: 24, label: '事件 2（V3）', isInput: true },
 ];
 
 const zollEvents = [
-  { row: 32, label: 'Pad off 的時間點' },
-  { row: 33, label: '到院換床' },
-  { row: 34, label: '其他事件' },
+  { row: 32, label: 'Pad off 的時間點', isInput: true },
+  { row: 33, label: '到院換床', isInput: true },
+  { row: 34, label: '其他事件', isInput: true },
 ];
 
+// 👇 這裡修正：重構 HTML 產生器，讓擁有 isInput 標記的項目自動轉為 10 字輸入框
 function buildEventRows(bodyId, events) {
   const tbody = document.getElementById(bodyId);
   for (const ev of events) {
     const tr = document.createElement('tr');
-    const td1 = document.createElement('td'); td1.textContent = ev.label;
+    const td1 = document.createElement('td'); 
+    
+    if (ev.isInput) {
+      const customInput = document.createElement('input');
+      customInput.type = 'text';
+      customInput.placeholder = ev.label; // 把原本的事件文字當作淡灰色提示字
+      customInput.maxLength = 10;          // 限制最多輸入 10 個字
+      customInput.style.width = '90%';     // 美化輸入框寬度
+      customInput.style.padding = '4px 6px';
+      customInput.style.border = '1px solid var(--border)';
+      customInput.style.borderRadius = '4px';
+      customInput.style.font = 'inherit';
+      td1.appendChild(customInput);
+    } else {
+      td1.textContent = ev.label;
+    }
+    
     const td2 = document.createElement('td');
     const w = document.createElement('div'); w.className = 'time24'; w.dataset.id = 'c' + ev.row;
     buildTime24(w, 'c' + ev.row);
