@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>救護品管 – 影片／AED 時間校正工具</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e1e4ea;
+    --text: #1f2329;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-soft: #eff4ff;
+    --warn: #c2410c;
+    --warn-soft: #fff4ec;
+    --result: #047857;
+    --result-soft: #ecfdf5;
+    --neg: #b91c1c;
+    --crossday: #fef3c7;
+    --crossday-border: #f59e0b;
+    --crossday-text: #92400e;
+    --shadow: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.05);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-size: 14px; line-height: 1.5; }
+  header { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: white;
+    padding: 18px 24px; box-shadow: var(--shadow); }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .sub { font-size: 12px; opacity: .85; margin-top: 4px; }
+  main { max-width: 1150px; margin: 0 auto; padding: 18px; display: grid; gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; box-shadow: var(--shadow); }
+  .card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: var(--accent); }
+  .card .desc { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+  .card .note { background: var(--warn-soft); color: var(--warn); padding: 6px 10px;
+    border-radius: 6px; font-size: 11.5px; margin: 0 0 10px; border-left: 3px solid var(--warn); }
+  details summary { cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 500;
+    user-select: none; padding: 4px 0; }
+  details[open] summary { margin-bottom: 8px; }
+  details .help { color: var(--muted); font-size: 12.5px; line-height: 1.7;
+    background: var(--accent-soft); padding: 10px 14px; border-radius: 6px; }
+  details .help code { background: #fff; padding: 1px 5px; border-radius: 3px;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+  details .help strong { color: var(--text); }
+  details .help .pill { display:inline-block; padding:1px 6px; background:var(--crossday);
+    border:1px solid var(--crossday-border); border-radius:4px; color:var(--crossday-text); font-size:11px;}
+
+  /* 基準點輸入區 */
+  .anchor { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+    background: var(--accent-soft); padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+  .anchor label { font-size: 12px; color: var(--muted); display: block; }
+  .anchor .lbl-text { display:block; margin-bottom: 4px; }
+  .anchor .diff-box { display: flex; flex-direction: column; justify-content: center;
+    background: var(--card); border: 1px dashed var(--accent); border-radius: 6px;
+    padding: 6px 10px; }
+  .anchor .diff-box .diff-val { font-size: 17px; font-weight: 600; color: var(--accent);
+    font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .anchor .diff-box .diff-val.neg { color: var(--neg); }
+
+  /* time-24 widget：HH:MM:SS text input + 跨日 toggle */
+  .time24 { display: flex; gap: 4px; align-items: center; }
+  .time24 input.t24 {
+    flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px;
+    background: #fff; font: inherit; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 13.5px;
+  }
+  .time24 input.t24:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  .time24 input.t24.invalid { border-color: var(--neg); background: #fef2f2; }
+  .time24 button.crossday-btn {
+    flex: 0 0 auto; padding: 5px 10px; border: 1px solid var(--border); border-radius: 5px;
+    background: #fff; color: var(--muted); cursor: pointer;
+    font: inherit; font-size: 12.5px; white-space: nowrap; user-select: none;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .time24 button.crossday-btn:hover { background: #f9fafb; }
+  .time24 button.crossday-btn.active {
+    background: var(--crossday); border-color: var(--crossday-border);
+    color: var(--crossday-text); font-weight: 600;
+  }
+
+  /* duration input */
+  input.duration {
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px;
+    background: #fff; font: inherit; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 13.5px; width: 100%;
+  }
+  input.duration:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  input.duration.invalid { border-color: var(--neg); background: #fef2f2; }
+
+  /* 事件表 */
+  table.events { width: 100%; border-collapse: collapse; }
+  table.events th, table.events td { text-align: left; padding: 6px 8px;
+    border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table.events th { font-size: 11.5px; color: var(--muted); font-weight: 500;
+    background: #fafbfc; }
+  table.events td:nth-child(1) { width: 32%; font-size: 13px; }
+  table.events td:nth-child(2) { width: 32%; }
+  table.events td:nth-child(3) { width: 30%; }
+  table.events td:nth-child(4) { width: 6%; text-align: center; }
+  .result-cell { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
+    color: var(--result); background: var(--result-soft); padding: 5px 8px; border-radius: 4px;
+    display: inline-block; min-width: 90px; text-align: center; }
+  .result-cell.empty { color: var(--muted); background: #f3f4f6; }
+  .result-cell .crossday-tag {
+    display: inline-block; margin-right: 4px; padding: 0 5px; border-radius: 3px;
+    background: var(--crossday); color: var(--crossday-text); font-size: 11px; font-weight: 600;
+  }
+  .copy-mini { background: transparent; border: none; cursor: pointer; color: var(--muted);
+    font-size: 14px; padding: 2px 6px; border-radius: 4px; }
+  .copy-mini:hover { background: var(--accent-soft); color: var(--accent); }
+
+  /* CPR、OHCA 區段的計算列 */
+  .calc-row { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 10px; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .calc-row:last-child { border-bottom: none; }
+  .calc-row .label { font-size: 13px; }
+  .calc-row .label small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+  /* 轉貼用 */
+  .paste-wrap { display: grid; gap: 10px; }
+  .paste-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .paste-table th, .paste-table td { border: 1px solid var(--border); padding: 5px 6px;
+    text-align: center; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .paste-table th { background: #fafbfc; color: var(--muted); font-weight: 500; font-size: 11px;
+    white-space: pre-line; line-height: 1.2; }
+  .paste-table td { color: var(--result); font-size: 12.5px; min-width: 56px; }
+  .paste-table td.empty { color: var(--muted); }
+  .paste-table td.manual-empty {
+    background: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 4px, #e5e7eb 4px, #e5e7eb 8px);
+    color: transparent;
+  }
+  .paste-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .paste-actions .hint { font-size: 11.5px; color: var(--muted); }
+  button.primary { background: var(--accent); color: white; border: none; padding: 8px 14px;
+    border-radius: 6px; cursor: pointer; font: inherit; font-weight: 500; }
+  button.primary:hover { background: #1d4ed8; }
+  button.secondary { background: white; color: var(--accent); border: 1px solid var(--accent);
+    padding: 8px 14px; border-radius: 6px; cursor: pointer; font: inherit; }
+  button.secondary:hover { background: var(--accent-soft); }
+
+  /* 工具列 */
+  .toolbar { display: flex; gap: 8px; padding: 10px 18px; background: var(--card);
+    border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
+
+  /* 提示 toast */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #111827; color: white; padding: 10px 16px; border-radius: 6px;
+    font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 999; }
+  .toast.show { opacity: 1; }
+
+  /* RWD */
+  @media (max-width: 720px) {
+    .anchor { grid-template-columns: 1fr; }
+    .calc-row { grid-template-columns: 1fr; gap: 4px; }
+    table.events td:nth-child(1) { width: 100%; display: block; padding-bottom: 0; }
+    table.events td:nth-child(2), table.events td:nth-child(3) { width: 50%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>救護品管 – 影片／AED 時間校正工具</h1>
+  <div class="sub">24 小時制輸入，跨日事件按一下「跨日」即視為隔日 (+24h)。</div>
+</header>
+
+<div class="toolbar">
+  <button class="secondary" id="clearBtn">清空所有欄位</button>
+  <button class="secondary" id="demoBtn">載入示範資料</button>
+  <button class="secondary" id="demoCrossBtn">載入跨日示範</button>
+</div>
+
+<main>
+
+  <!-- 說明 -->
+  <section class="card">
+    <details>
+      <summary>📖 使用說明 / 演算邏輯</summary>
+      <div class="help">
+        <strong>使用步驟：</strong><br>
+        1. 用 AED 的語音「正在進行分析…」當作輔助標記，找出影像和 AED 是同一瞬間的時間點。<br>
+        2. 在「V1 校正」區輸入此瞬間的 AED 時間和 Video1 時間（24 小時制 HH:MM:SS），系統自動算出時差。<br>
+        3. 之後在事件列表輸入各事件在 Video1 中的時間。<br>
+        4. 若使用 Video2／Video3，先填它和 V1 的同步參考點，再填事件時間。<br><br>
+        <strong>跨日按鈕：</strong><br>
+        每個時間欄位右邊都有一個 <span class="pill">跨日</span> 切換鈕，預設關閉（白底）。<br>
+        當某個事件的時間從前一日跨到隔天（例：影片從 23:55 跨到 00:30），對那一格按一下「跨日」變黃底，<strong>運算就會把這格時間視為加 24 小時</strong>。<br>
+        如果同步點本身也跨日（例如 AED 還在 23:55、但 Video 已跑到隔天 00:00），那個 C3 也要按「跨日」。<br><br>
+        <strong>計算邏輯：</strong><br>
+        <code>sec(輸入) = parseHH:MM:SS + (跨日 ? 86400 : 0)</code><br>
+        <code>D3 = sec(C3) − sec(B3)</code> ← 可正可負<br>
+        <code>E_x = sec(C_x) − D3</code> ← 還原成 AED 時間<br>
+        顯示時用 <code>mod 86400</code> 變回 0–24 小時的時鐘讀數，若計算結果落在隔日範圍會額外標 <span class="pill">隔日</span>。<br><br>
+        <strong>結果格式：</strong>UI 與「轉貼用」皆為 24 小時 <code>h:mm:ss</code>，可直接貼進品管 Excel。
+      </div>
+    </details>
+  </section>
+
+  <!-- V1 主校正 -->
+  <section class="card" data-section="v1">
+    <h2>① V1 校正（以 AED 為基準）</h2>
+    <p class="desc">找到 AED 與 Video1 同一瞬間的時間點（例：AED 說「不要接觸病人」那一秒）</p>
+    <div class="anchor">
+      <label>
+        <span class="lbl-text">當下 AED 時間 (B3)</span>
+        <div class="time24" data-id="b3"></div>
+      </label>
+      <label>
+        <span class="lbl-text">當下 Video1 時間 (C3)</span>
+        <div class="time24" data-id="c3"></div>
+      </label>
+      <div class="diff-box">
+        <div style="font-size:11px;color:var(--muted);">時差 D3（秒）= C3 − B3</div>
+        <div class="diff-val" id="d3">—</div>
+        <div style="font-size:11px;color:var(--muted);" id="d3hint"></div>
+      </div>
+    </div>
+
+    <table class="events">
+      <thead><tr><th>事件</th><th>Video1 時間</th><th>還原 AED 時間</th><th></th></tr></thead>
+      <tbody id="v1Body"></tbody>
+    </table>
+  </section>
+
+  <!-- V2 -->
+  <section class="card" data-section="v2">
+    <h2>② V2 校正（用 V1 當參考基準）</h2>
+    <div class="anchor">
+      <label>
+        <span class="lbl-text">當下 V1 時間 (B15)</span>
+        <div class="time24" data-id="b15"></div>
+      </label>
+      <label>
+        <span class="lbl-text">當下 V2 時間 (C15)</span>
+        <div class="time24" data-id="c15"></div>
+      </label>
+      <div class="diff-box">
+        <div style="font-size:11px;color:var(--muted);">時差 D15（秒）= C15 − B15</div>
+        <div class="diff-val" id="d15">—</div>
+        <div style="font-size:11px;color:var(--muted);" id="d15hint"></div>
+      </div>
+    </div>
+    <table class="events">
+      <thead><tr><th>事件</th><th>Video2 時間</th><th>還原 AED 時間</th><th></th></tr></thead>
+      <tbody id="v2Body"></tbody>
+    </table>
+  </section>
+
+  <!-- V3 -->
+  <section class="card" data-section="v3">
+    <h2>③ V3 校正（用 V1 當參考基準）</h2>
+    <p class="note">※ 依原 Excel 邏輯，V3 還原公式使用 V2 的偏移 D15 + D3。若 V3 與 V2 不同步，請改成另用 V1 直接同步並填入此區段。</p>
+    <div class="anchor">
+      <label>
+        <span class="lbl-text">當下 V1 時間 (B22)</span>
+        <div class="time24" data-id="b22"></div>
+      </label>
+      <label>
+        <span class="lbl-text">當下 V3 時間 (C22)</span>
+        <div class="time24" data-id="c22"></div>
+      </label>
+      <div class="diff-box">
+        <div style="font-size:11px;color:var(--muted);">時差 D22（秒）= C22 − B22（僅參考）</div>
+        <div class="diff-val" id="d22">—</div>
+        <div style="font-size:11px;color:var(--muted);" id="d22hint"></div>
+      </div>
+    </div>
+    <table class="events">
+      <thead><tr><th>事件</th><th>Video3 時間</th><th>還原 AED 時間（套用 D15+D3）</th><th></th></tr></thead>
+      <tbody id="v3Body"></tbody>
+    </table>
+  </section>
+
+  <!-- Zoll X -->
+  <section class="card" data-section="zoll">
+    <h2>④ Zoll X 置換（以 AED 為基準）</h2>
+    <p class="desc">現場置換成 Zoll X series 時，用 AED 中聽到置換的時間點作同步基準</p>
+    <div class="anchor">
+      <label>
+        <span class="lbl-text">當下 AED 時間 (B31)</span>
+        <div class="time24" data-id="b31"></div>
+      </label>
+      <label>
+        <span class="lbl-text">當下 Zoll X 時間 (C31)</span>
+        <div class="time24" data-id="c31"></div>
+      </label>
+      <div class="diff-box">
+        <div style="font-size:11px;color:var(--muted);">時差 D31（秒）= C31 − B31</div>
+        <div class="diff-val" id="d31">—</div>
+        <div style="font-size:11px;color:var(--muted);" id="d31hint"></div>
+      </div>
+    </div>
+    <table class="events">
+      <thead><tr><th>事件</th><th>Zoll X 時間</th><th>還原 AED 時間</th><th></th></tr></thead>
+      <tbody id="zollBody"></tbody>
+    </table>
+  </section>
+
+  <!-- CPR / OHCA 計算 -->
+  <section class="card">
+    <h2>⑤ Time in compressions</h2>
+    <p class="desc">輸入下列三個 CPR 相關秒數，工具會自動算出各段 Time in compressions 並填入「轉貼用」</p>
+
+    <div class="calc-row">
+      <div class="label">① 判定 OHCA → 貼上 AED 區間 CPR 總秒數
+        <small>判定為 OHCA 後到 AED 貼上貼片前，期間實際做 CPR 的累積秒數</small>
+      </div>
+      <input type="number" min="0" step="1" class="duration" id="cpr_ohca_aed" placeholder="秒">
+      <div>
+        <span style="font-size:11px;color:var(--muted);">Time in compressions (OHCA→AED) =</span>
+        <span class="result-cell empty" id="e_ohca_aed">—</span>
+      </div>
+    </div>
+
+    <div class="calc-row">
+      <div class="label">② 呼吸道建立中斷 CPR 秒數 (3-18)
+        <small>建立呼吸道過程中 CPR 被中斷的累積秒數</small>
+      </div>
+      <input type="number" min="0" step="1" class="duration" id="airway_break" placeholder="秒">
+      <div></div>
+    </div>
+
+    <div class="calc-row">
+      <div class="label">③ 裝 MCPR 中斷 CPR 秒數 (3-9)
+        <small>裝設壓胸機過程中 CPR 被中斷的累積秒數</small>
+      </div>
+      <input type="number" min="0" step="1" class="duration" id="mcpr_break" placeholder="秒">
+      <div></div>
+    </div>
+
+    <p class="desc" style="margin-top:14px"><strong>計算結果（自動）：</strong></p>
+
+    <div class="calc-row">
+      <div class="label">Time in compressions (貼AED → MCPR，有 LUCAS)
+        <small>= (MCPR 架設 − 貼 AED) − 呼吸道中斷 − 裝 MCPR 中斷</small>
+      </div>
+      <div></div>
+      <div>
+        <span style="font-size:11px;color:var(--muted);">=</span>
+        <span class="result-cell empty" id="e_aed_mcpr">—</span>
+      </div>
+    </div>
+
+    <div class="calc-row">
+      <div class="label">Time in compressions (貼AED → 事件結束，沒 LUCAS)
+        <small>= (事件結束 − 貼 AED) − 呼吸道中斷</small>
+      </div>
+      <div></div>
+      <div>
+        <span style="font-size:11px;color:var(--muted);">=</span>
+        <span class="result-cell empty" id="e_aed_end">—</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 轉貼用 -->
+  <section class="card" data-section="paste">
+    <h2>⑥ 轉貼用（給品管表單）</h2>
+    <p class="desc">依照原始 Excel 第 2 列排版，A 到 R 共 18 欄。<strong>灰底斜紋格</strong>（C/G/K/L/M/O/P）為品管表單需手填，這裡留空。複製整列後在品管 Excel A2 用「貼上值」即可保留空白格。</p>
+    <div class="paste-wrap">
+      <div style="overflow-x:auto;">
+        <table class="paste-table">
+          <thead>
+            <tr>
+              <th>A
+EMT接觸
+(3-1)</th>
+              <th>B
+判斷OHCA
+(3-2)</th>
+              <th>C
+頸脈搏檢查
+(3-3)</th>
+              <th>D
+CPR開始
+(3-4)</th>
+              <th>E
+第一次給氣
+(3-5)</th>
+              <th>F
+第一次給藥
+(3-6)</th>
+              <th>G
+壓胸機狀態
+(3-7)</th>
+              <th>H
+MCPR架設
+(3-8)</th>
+              <th>I
+裝MCPR中斷秒
+(3-9)</th>
+              <th>J
+AED貼上貼片
+(3-10)</th>
+              <th>K
+AED初始心律
+(3-11)</th>
+              <th>L
+首次電擊
+(3-12)</th>
+              <th>M
+電擊後心律
+(3-13)</th>
+              <th>N
+AED關機
+(3-14)</th>
+              <th>O
+插管次數
+(3-15)</th>
+              <th>P
+呼吸道器材
+(3-16)</th>
+              <th>Q
+呼吸道建立
+(3-17)</th>
+              <th>R
+呼吸道中斷秒
+(3-18)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr id="pasteRow">
+              <td id="p_a">—</td>
+              <td id="p_b">—</td>
+              <td id="p_c" class="manual-empty"></td>
+              <td id="p_d">—</td>
+              <td id="p_e">—</td>
+              <td id="p_f">—</td>
+              <td id="p_g" class="manual-empty"></td>
+              <td id="p_h">—</td>
+              <td id="p_i">—</td>
+              <td id="p_j">—</td>
+              <td id="p_k" class="manual-empty"></td>
+              <td id="p_l" class="manual-empty"></td>
+              <td id="p_m" class="manual-empty"></td>
+              <td id="p_n">—</td>
+              <td id="p_o" class="manual-empty"></td>
+              <td id="p_p" class="manual-empty"></td>
+              <td id="p_q">—</td>
+              <td id="p_r">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="paste-actions">
+        <button class="primary" id="copyTabBtn">複製 A→R 整列（Tab 分隔，貼進品管 A2）</button>
+        <button class="secondary" id="copyCsvBtn">複製為 CSV</button>
+        <span class="hint">灰底格輸出為空字串，貼上後仍是空白</span>
+      </div>
+    </div>
+
+    <div style="margin-top: 18px;">
+      <p class="desc"><strong>Time in compressions 額外欄位（品管 Excel AC / AE）：</strong>因為這兩欄不在 A-R 連續區，需另外複製貼到 AC2 位置</p>
+      <div style="overflow-x:auto;">
+        <table class="paste-table">
+          <thead>
+            <tr>
+              <th>AC
+Time in compressions
+(OHCA→貼AED)</th>
+              <th>AE
+Time in compressions
+(貼AED→MCPR)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td id="p_ac">—</td>
+              <td id="p_ae">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="paste-actions" style="margin-top: 8px;">
+        <button class="secondary" id="copyTicBtn">複製 AC + AE（Tab 分隔，貼進品管 AC2）</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   核心常數與時間運算
+   ===================================================================== */
+
+const SEC_PER_DAY = 86400;
+
+// 秒數 → "HH:MM:SS"（24小時，自動 mod 一天）
+function secTo24(s) {
+  let v = ((s % SEC_PER_DAY) + SEC_PER_DAY) % SEC_PER_DAY;
+  v = Math.round(v);
+  return String(Math.floor(v / 3600)).padStart(2,'0') + ':' +
+         String(Math.floor((v % 3600) / 60)).padStart(2,'0') + ':' +
+         String(v % 60).padStart(2,'0');
+}
+
+/* =====================================================================
+   24 小時時間 parser
+   ===================================================================== */
+
+// 接受 "h:m:s"、"h:m"、"hh:mm:ss" 或純數字 "hhmmss"
+// 回傳秒數 (0 ~ 86399) 或 null
+function parse24Hour(str) {
+  if (!str || !str.trim()) return null;
+  const s = str.trim();
+  let h, mn, sec;
+  let m = s.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/);
+  if (m) {
+    h = +m[1]; mn = +m[2]; sec = m[3] ? +m[3] : 0;
+  } else {
+    m = s.match(/^(\d+)$/);
+    if (!m) return null;
+    const d = m[1];
+    if (d.length <= 2) { h = +d; mn = 0; sec = 0; }
+    else if (d.length <= 4) { h = +d.slice(0, -2); mn = +d.slice(-2); sec = 0; }
+    else { h = +d.slice(0, -4); mn = +d.slice(-4, -2); sec = +d.slice(-2); }
+  }
+  if (h < 0 || h > 23 || mn > 59 || sec > 59) return null;
+  return h * 3600 + mn * 60 + sec;
+}
+
+// 持續時間 parser（H:MM:SS，0–23 小時）
+function parseDuration(str) {
+  if (!str || !str.trim()) return null;
+  const s = str.trim();
+  let m = s.match(/^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/);
+  if (m) {
+    const h = +m[1], mn = +m[2], sec = m[3] ? +m[3] : 0;
+    if (h > 23 || mn > 59 || sec > 59) return null;
+    return h * 3600 + mn * 60 + sec;
+  }
+  m = s.match(/^(\d+)$/);
+  if (m) {
+    const d = m[1];
+    let h, mn, sec;
+    if (d.length <= 2) { h = 0; mn = 0; sec = +d; }
+    else if (d.length <= 4) { h = 0; mn = +d.slice(0, -2); sec = +d.slice(-2); }
+    else { h = +d.slice(0, -4); mn = +d.slice(-4, -2); sec = +d.slice(-2); }
+    if (h > 23 || mn > 59 || sec > 59) return null;
+    return h * 3600 + mn * 60 + sec;
+  }
+  return null;
+}
+
+// 秒數 → "HH:MM:SS" 標準格式（用於正規化輸入文字）
+function normalize24(sec) {
+  const v = Math.round(sec);
+  return String(Math.floor(v / 3600)).padStart(2,'0') + ':' +
+         String(Math.floor((v % 3600) / 60)).padStart(2,'0') + ':' +
+         String(v % 60).padStart(2,'0');
+}
+
+/* =====================================================================
+   建構介面：time-24 widget
+   ===================================================================== */
+
+function buildTime24(container, id) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 't24';
+  input.dataset.id = id;
+  input.placeholder = 'hh:mm:ss';
+  input.maxLength = 8;
+  input.autocomplete = 'off';
+  input.inputMode = 'numeric';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'crossday-btn';
+  btn.dataset.id = id;
+  btn.textContent = '跨日';
+  btn.title = '點一下表示這格的時間屬於隔天 (+24 小時)';
+
+  container.appendChild(input);
+  container.appendChild(btn);
+}
+
+// anchor 區段
+document.querySelectorAll('.time24').forEach(el => {
+  buildTime24(el, el.dataset.id);
+});
+
+const v1Events = [
+  { row: 4,  label: 'EMT 接觸患者' },
+  { row: 5,  label: 'EMT 判斷患者為 OHCA' },
+  { row: 6,  label: 'CPR 開始時間' },
+  { row: 7,  label: '袐錄器內貼上 AED 時間' },
+  { row: 8,  label: '第一次給氣的時間點' },
+  { row: 9,  label: '第一支 Epinephrine' },
+  { row: 10, label: '呼吸道建立時間' },
+  { row: 11, label: 'MCPR 架設點' },
+  { row: 12, label: 'AED 關機 / AED 拔除 / 到院換床' },
+  { row: 13, label: '第一次 ROSC' },
+];
+
+const v2Events = [
+  { row: 16, label: '到院換床（V2）' },
+];
+
+const v3Events = [
+  { row: 23, label: '事件 1（V3）' },
+  { row: 24, label: '事件 2（V3）' },
+];
+
+const zollEvents = [
+  { row: 32, label: 'Pad off 的時間點' },
+  { row: 33, label: '到院換床' },
+  { row: 34, label: '其他事件' },
+];
+
+function buildEventRows(bodyId, events) {
+  const tbody = document.getElementById(bodyId);
+  for (const ev of events) {
+    const tr = document.createElement('tr');
+    const td1 = document.createElement('td'); td1.textContent = ev.label;
+    const td2 = document.createElement('td');
+    const w = document.createElement('div'); w.className = 'time24'; w.dataset.id = 'c' + ev.row;
+    buildTime24(w, 'c' + ev.row);
+    td2.appendChild(w);
+    const td3 = document.createElement('td');
+    const span = document.createElement('span'); span.className = 'result-cell empty';
+    span.id = 'e' + ev.row; span.textContent = '—';
+    td3.appendChild(span);
+    const td4 = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.className = 'copy-mini'; btn.dataset.copy = 'e' + ev.row; btn.title = '複製';
+    btn.textContent = '⧉';
+    td4.appendChild(btn);
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+    tbody.appendChild(tr);
+  }
+}
+
+buildEventRows('v1Body', v1Events);
+buildEventRows('v2Body', v2Events);
+buildEventRows('v3Body', v3Events);
+buildEventRows('zollBody', zollEvents);
+
+/* =====================================================================
+   讀取 widget 的值（含跨日位移）
+   ===================================================================== */
+
+// 回傳 { sec: 含跨日位移的秒數（可能 0~172799）, valid, crossDay, parsedSec: 不含位移的原始秒數 }
+function readClockTime(id) {
+  const input = document.querySelector('.t24[data-id="' + id + '"]');
+  const btn = document.querySelector('.crossday-btn[data-id="' + id + '"]');
+  if (!input) return { sec: null, valid: true, crossDay: false, parsedSec: null };
+  const text = input.value.trim();
+  if (!text) { input.classList.remove('invalid'); return { sec: null, valid: true, crossDay: !!(btn && btn.classList.contains('active')), parsedSec: null }; }
+  const parsed = parse24Hour(text);
+  if (parsed === null) { input.classList.add('invalid'); return { sec: null, valid: false, crossDay: false, parsedSec: null }; }
+  input.classList.remove('invalid');
+  const crossDay = !!(btn && btn.classList.contains('active'));
+  return { sec: parsed + (crossDay ? SEC_PER_DAY : 0), valid: true, crossDay, parsedSec: parsed };
+}
+
+// C27/C29 直接以秒數整數輸入
+function readDur(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const text = el.value.trim();
+  if (!text) { el.classList.remove('invalid'); return null; }
+  const n = Number(text);
+  if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+    el.classList.add('invalid');
+    return null;
+  }
+  el.classList.remove('invalid');
+  return n;
+}
+
+/* =====================================================================
+   結果顯示
+   ===================================================================== */
+
+function setDiffDisplay(id, hintId, secVal) {
+  const el = document.getElementById(id);
+  const hint = document.getElementById(hintId);
+  if (secVal === null) { el.textContent = '—'; el.classList.remove('neg'); hint.textContent = ''; return; }
+  el.textContent = (secVal >= 0 ? '+' : '') + secVal + ' 秒';
+  el.classList.toggle('neg', secVal < 0);
+  const absS = Math.abs(secVal);
+  const mm = Math.floor(absS / 60), ss = absS % 60;
+  const sign = secVal < 0 ? '−' : '';
+  hint.textContent = '≈ ' + sign + mm + ' 分 ' + ss + ' 秒';
+}
+
+// 設定還原時間結果格。 rawSec 為「不取 mod」的原始秒數
+// 若 rawSec 落在 [86400, 172800) 區間，顯示「隔日」標記
+function setRestoredResult(id, rawSec) {
+  const el = document.getElementById(id);
+  if (rawSec === null || rawSec === undefined) {
+    el.innerHTML = '—'; el.classList.add('empty'); return;
+  }
+  el.classList.remove('empty');
+  const dayOffset = Math.floor(rawSec / SEC_PER_DAY);
+  const timeStr = secTo24(rawSec);
+  if (dayOffset === 0) {
+    el.textContent = timeStr;
+  } else if (dayOffset === 1) {
+    el.innerHTML = '<span class="crossday-tag">隔日</span>' + timeStr;
+  } else if (dayOffset === -1) {
+    el.innerHTML = '<span class="crossday-tag">前日</span>' + timeStr;
+  } else {
+    el.innerHTML = '<span class="crossday-tag">' + (dayOffset > 0 ? '+' : '') + dayOffset + '日</span>' + timeStr;
+  }
+}
+
+function setResultText(id, text) {
+  const el = document.getElementById(id);
+  if (!text) { el.textContent = '—'; el.classList.add('empty'); }
+  else { el.textContent = text; el.classList.remove('empty'); }
+}
+
+/* =====================================================================
+   主計算流程（明確跨日位移，不再用 MOD 自動推測）
+   ===================================================================== */
+
+function recalcAll() {
+  // --- V1: D3 ---
+  const b3 = readClockTime('b3');
+  const c3 = readClockTime('c3');
+  const d3 = (b3.sec !== null && c3.sec !== null) ? (c3.sec - b3.sec) : null;
+  setDiffDisplay('d3', 'd3hint', d3);
+
+  for (const ev of v1Events) {
+    const cv = readClockTime('c' + ev.row);
+    setRestoredResult('e' + ev.row, (d3 !== null && cv.sec !== null) ? (cv.sec - d3) : null);
+  }
+
+  // --- V2: D15 ---
+  const b15 = readClockTime('b15');
+  const c15 = readClockTime('c15');
+  const d15 = (b15.sec !== null && c15.sec !== null) ? (c15.sec - b15.sec) : null;
+  setDiffDisplay('d15', 'd15hint', d15);
+
+  for (const ev of v2Events) {
+    const cv = readClockTime('c' + ev.row);
+    const total = (d15 !== null && d3 !== null) ? d15 + d3 : null;
+    setRestoredResult('e' + ev.row, (total !== null && cv.sec !== null) ? (cv.sec - total) : null);
+  }
+
+  // --- V3: D22 ---
+  const b22 = readClockTime('b22');
+  const c22 = readClockTime('c22');
+  const d22 = (b22.sec !== null && c22.sec !== null) ? (c22.sec - b22.sec) : null;
+  setDiffDisplay('d22', 'd22hint', d22);
+
+  for (const ev of v3Events) {
+    const cv = readClockTime('c' + ev.row);
+    const total = (d15 !== null && d3 !== null) ? d15 + d3 : null;
+    setRestoredResult('e' + ev.row, (total !== null && cv.sec !== null) ? (cv.sec - total) : null);
+  }
+
+  // --- Zoll: D31 ---
+  const b31 = readClockTime('b31');
+  const c31 = readClockTime('c31');
+  const d31 = (b31.sec !== null && c31.sec !== null) ? (c31.sec - b31.sec) : null;
+  setDiffDisplay('d31', 'd31hint', d31);
+
+  for (const ev of zollEvents) {
+    const cv = readClockTime('c' + ev.row);
+    setRestoredResult('e' + ev.row, (d31 !== null && cv.sec !== null) ? (cv.sec - d31) : null);
+  }
+
+  // --- ⑤ Time in compressions (三個 CPR 輸入) ---
+  const ohcaAedCpr = readDur('cpr_ohca_aed');   // 輸入①
+  const airwayBreak = readDur('airway_break');  // 輸入②
+  const mcprBreak = readDur('mcpr_break');      // 輸入③
+
+  // 結果 1: Time in compressions (OHCA → AED) = 輸入①直接
+  if (ohcaAedCpr !== null) {
+    setResultText('e_ohca_aed', ohcaAedCpr + ' 秒（' + secTo24(ohcaAedCpr) + '）');
+  } else { setResultText('e_ohca_aed', null); }
+
+  // 結果 2: Time in compressions (貼AED → MCPR，有 LUCAS) = (C11 - C7) - ② - ③
+  const c11 = readClockTime('c11');
+  const c7  = readClockTime('c7');
+  if (c11.sec !== null && c7.sec !== null) {
+    const ab = airwayBreak || 0;
+    const mb = mcprBreak || 0;
+    const sec = (c11.sec - c7.sec) - ab - mb;
+    setResultText('e_aed_mcpr', (sec < 0 ? '−' : '') + secTo24(Math.abs(sec)));
+  } else { setResultText('e_aed_mcpr', null); }
+
+  // 結果 3: Time in compressions (貼AED → 事件結束，沒 LUCAS) = (C12 - C7) - ②
+  const c12 = readClockTime('c12');
+  if (c12.sec !== null && c7.sec !== null) {
+    const ab = airwayBreak || 0;
+    const sec = (c12.sec - c7.sec) - ab;
+    setResultText('e_aed_end', (sec < 0 ? '−' : '') + secTo24(Math.abs(sec)));
+  } else { setResultText('e_aed_end', null); }
+
+  updatePasteRow();
+}
+
+/* 轉貼列：複製出去用 24 小時 h:mm:ss（取 mod，不含隔日標記） */
+function updatePasteRow() {
+  const b3 = readClockTime('b3');
+  const c3 = readClockTime('c3');
+  const d3 = (b3.sec !== null && c3.sec !== null) ? (c3.sec - b3.sec) : null;
+
+  const map = {
+    p_a: 4, p_b: 5, p_d: 6, p_e: 8, p_f: 9,
+    p_h: 11, p_j: 7, p_n: 12, p_q: 10,
+  };
+  for (const [pid, row] of Object.entries(map)) {
+    const dst = document.getElementById(pid);
+    const cv = readClockTime('c' + row);
+    if (d3 !== null && cv.sec !== null) {
+      dst.textContent = secTo24(cv.sec - d3);
+      dst.classList.remove('empty');
+    } else {
+      dst.textContent = '—'; dst.classList.add('empty');
+    }
+  }
+  // p_i = 裝MCPR中斷CPR秒（輸入③，整數秒）
+  const mb = readDur('mcpr_break');
+  const piEl = document.getElementById('p_i');
+  if (mb !== null) { piEl.textContent = String(mb); piEl.classList.remove('empty'); }
+  else { piEl.textContent = '—'; piEl.classList.add('empty'); }
+
+  // p_r = 呼吸道中斷CPR秒（輸入②，整數秒）
+  const ab = readDur('airway_break');
+  const prEl = document.getElementById('p_r');
+  if (ab !== null) { prEl.textContent = String(ab); prEl.classList.remove('empty'); }
+  else { prEl.textContent = '—'; prEl.classList.add('empty'); }
+
+  // p_ac = Time in compressions (OHCA→AED)（輸入①，h:mm:ss）
+  const oa = readDur('cpr_ohca_aed');
+  const pacEl = document.getElementById('p_ac');
+  if (oa !== null) { pacEl.textContent = secTo24(oa); pacEl.classList.remove('empty'); }
+  else { pacEl.textContent = '—'; pacEl.classList.add('empty'); }
+
+  // p_ae = Time in compressions (貼AED→MCPR，自動算)
+  const eAedMcpr = document.getElementById('e_aed_mcpr');
+  const dstAe = document.getElementById('p_ae');
+  if (eAedMcpr && !eAedMcpr.classList.contains('empty')) {
+    dstAe.textContent = eAedMcpr.textContent;
+    dstAe.classList.remove('empty');
+  } else {
+    dstAe.textContent = '—'; dstAe.classList.add('empty');
+  }
+}
+
+/* =====================================================================
+   事件監聽
+   ===================================================================== */
+
+// 輸入即時計算
+document.addEventListener('input', e => {
+  if (e.target.matches('input.t24, input.duration')) recalcAll();
+});
+
+// 跨日按鈕切換
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('crossday-btn')) {
+    e.target.classList.toggle('active');
+    recalcAll();
+    return;
+  }
+  if (e.target.classList.contains('copy-mini')) {
+    const id = e.target.dataset.copy;
+    const el = document.getElementById(id);
+    if (el && !el.classList.contains('empty')) {
+      navigator.clipboard.writeText(el.textContent.replace(/^(隔日|前日|[\+\-]?\d+日)\s*/, '')).then(() => showToast('已複製'));
+    }
+  }
+});
+
+// blur 時正規化文字
+document.addEventListener('blur', e => {
+  if (e.target.matches('input.t24')) {
+    const text = e.target.value.trim();
+    if (!text) return;
+    const sec = parse24Hour(text);
+    if (sec !== null) e.target.value = normalize24(sec);
+  }
+  // C27/C29 是純秒數整數輸入，不需要正規化
+}, true);
+
+/* =====================================================================
+   工具列：清空、示範資料
+   ===================================================================== */
+
+function clearAll() {
+  document.querySelectorAll('input.t24, input.duration').forEach(i => { i.value = ''; i.classList.remove('invalid'); });
+  document.querySelectorAll('button.crossday-btn').forEach(b => b.classList.remove('active'));
+  recalcAll();
+}
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  clearAll();
+  showToast('已清空');
+});
+
+document.getElementById('demoBtn').addEventListener('click', () => {
+  // 同日示範：AED 12:00:00 = Video 12:00:30
+  clearAll();
+  setVal('b3', '12:00:00');
+  setVal('c3', '12:00:30');
+  setVal('c4', '12:01:00');
+  setVal('c5', '12:02:00');
+  setVal('c6', '12:03:00');
+  setVal('c7', '12:04:00');
+  setVal('c8', '12:05:00');
+  setVal('c9', '12:08:00');
+  setVal('c10', '12:12:00');
+  setVal('c11', '12:15:00');
+  setVal('c12', '12:30:00');
+  setVal('c13', '12:22:00');
+  setDur('cpr_ohca_aed', '120');
+  setDur('airway_break', '15');
+  setDur('mcpr_break', '8');
+  recalcAll();
+  showToast('已載入同日示範資料');
+});
+
+document.getElementById('demoCrossBtn').addEventListener('click', () => {
+  // 跨日示範：sync 點 23:50 PM，事件從 23:55 跨到隔日 00:45
+  clearAll();
+  setVal('b3', '23:50:00');
+  setVal('c3', '23:50:30');
+  setVal('c4', '23:55:00');
+  setVal('c5', '23:56:00');
+  setVal('c6', '23:57:00');
+  setVal('c7', '23:58:00');
+  setVal('c8', '00:05:00', true);   // crossDay
+  setVal('c9', '00:08:00', true);
+  setVal('c10', '00:12:00', true);
+  setVal('c11', '00:30:00', true);
+  setVal('c12', '00:45:00', true);
+  setVal('c13', '00:25:00', true);
+  setDur('cpr_ohca_aed', '90');
+  setDur('airway_break', '20');
+  setDur('mcpr_break', '10');
+  recalcAll();
+  showToast('已載入跨日示範（跨日後 6 格已勾選「跨日」）');
+});
+
+function setVal(id, hhmmss, crossDay) {
+  const input = document.querySelector('.t24[data-id="' + id + '"]');
+  if (input) input.value = hhmmss;
+  if (crossDay) {
+    const btn = document.querySelector('.crossday-btn[data-id="' + id + '"]');
+    if (btn) btn.classList.add('active');
+  }
+}
+function setDur(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.value = v;
+}
+
+/* =====================================================================
+   複製整列
+   ===================================================================== */
+// A-R 共 18 格；manual-empty 永遠輸出空字串
+function getPasteCells() {
+  return ['p_a','p_b','p_c','p_d','p_e','p_f','p_g','p_h','p_i','p_j','p_k','p_l','p_m','p_n','p_o','p_p','p_q','p_r']
+    .map(id => {
+      const el = document.getElementById(id);
+      if (!el) return '';
+      if (el.classList.contains('manual-empty')) return '';
+      return el.classList.contains('empty') ? '' : el.textContent;
+    });
+}
+function getTicCells() {
+  return ['p_ac','p_ae'].map(id => {
+    const el = document.getElementById(id);
+    return (el && !el.classList.contains('empty')) ? el.textContent : '';
+  });
+}
+document.getElementById('copyTabBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(getPasteCells().join('\t')).then(() => showToast('已複製 A→R（Tab 分隔）'));
+});
+document.getElementById('copyCsvBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(getPasteCells().join(',')).then(() => showToast('已複製 A→R（CSV）'));
+});
+document.getElementById('copyTicBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(getTicCells().join('\t')).then(() => showToast('已複製 AC + AE'));
+});
+
+/* =====================================================================
+   Toast 提示
+   ===================================================================== */
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* 啟動 */
+recalcAll();
+</script>
+</body>
+</html>
