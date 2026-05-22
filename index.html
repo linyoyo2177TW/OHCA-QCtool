@@ -172,6 +172,7 @@
   <button class="secondary" id="clearBtn">清空所有欄位</button>
   <button class="secondary" id="demoBtn">載入示範資料</button>
   <button class="secondary" id="demoCrossBtn">載入跨日示範</button>
+  <button class="primary" id="savePngBtn" title="把目前計算內容存成 PNG 圖檔">📷 儲存成圖檔</button>
 </div>
 
 <main>
@@ -1000,6 +1001,143 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
+
+/* =====================================================================
+   匯出為 PNG（SVG foreignObject + Canvas，無外部依賴）
+   ===================================================================== */
+async function captureToPng() {
+  const btn = document.getElementById('savePngBtn');
+  const origText = btn.textContent;
+  btn.textContent = '⏳ 產生中...'; btn.disabled = true;
+
+  const originallyClosed = [];
+  const restoreClosed = () => originallyClosed.forEach(d => d.open = false);
+
+  try {
+    const target = document.querySelector('main');
+
+    // 1. 強制展開所有 <details>
+    target.querySelectorAll('details').forEach(d => {
+      if (!d.open) { originallyClosed.push(d); d.open = true; }
+    });
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => setTimeout(r, 50));
+
+    // 2. 把當前 input value 寫回 attribute（cloneNode 不會帶 value 屬性）
+    target.querySelectorAll('input').forEach(el => {
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        if (el.checked) el.setAttribute('checked', ''); else el.removeAttribute('checked');
+      } else {
+        el.setAttribute('value', el.value || '');
+      }
+    });
+    // select 的 value 也要處理
+    target.querySelectorAll('select').forEach(sel => {
+      Array.from(sel.options).forEach(opt => {
+        if (opt.selected) opt.setAttribute('selected', '');
+        else opt.removeAttribute('selected');
+      });
+    });
+
+    const rect = target.getBoundingClientRect();
+    const w = Math.ceil(rect.width);
+    const h = Math.ceil(target.scrollHeight);
+
+    if (w === 0 || h === 0) throw new Error('內容尺寸為 0');
+
+    // 3. 收集所有 <style>
+    const styleText = Array.from(document.querySelectorAll('style'))
+      .map(s => s.textContent).join('\n');
+
+    // 4. 用 DOM API 建立 SVG（XMLSerializer 會輸出合法 XML）
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const xhtmlNS = 'http://www.w3.org/1999/xhtml';
+
+    const svgEl = document.createElementNS(svgNS, 'svg');
+    svgEl.setAttribute('width', String(w));
+    svgEl.setAttribute('height', String(h));
+    svgEl.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+
+    const foEl = document.createElementNS(svgNS, 'foreignObject');
+    foEl.setAttribute('x', '0');
+    foEl.setAttribute('y', '0');
+    foEl.setAttribute('width', String(w));
+    foEl.setAttribute('height', String(h));
+
+    const wrapperDiv = document.createElementNS(xhtmlNS, 'div');
+    wrapperDiv.setAttribute('style', 'width:' + w + 'px; background:#f5f6f8; box-sizing:border-box;');
+
+    const styleEl = document.createElementNS(xhtmlNS, 'style');
+    // 用 CDATA 包住 CSS 避免特殊字元出問題
+    styleEl.appendChild(document.createTextNode(styleText));
+    wrapperDiv.appendChild(styleEl);
+
+    // 把 main 的 clone 直接 append 到 wrapper（會被 XMLSerializer 正確序列化）
+    const clone = target.cloneNode(true);
+    wrapperDiv.appendChild(clone);
+
+    foEl.appendChild(wrapperDiv);
+    svgEl.appendChild(foEl);
+
+    // 用 XMLSerializer 輸出合法的 XML
+    const svgStr = new XMLSerializer().serializeToString(svgEl);
+
+    // 5. 轉成 Image
+    const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+
+    let img;
+    try {
+      img = await new Promise((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = () => reject(new Error('SVG 載入失敗，請打開瀏覽器主控台看詳細錯誤'));
+        i.src = svgUrl;
+      });
+    } finally {
+      URL.revokeObjectURL(svgUrl);
+    }
+
+    // 6. 畫到 canvas（2x 解析度）
+    const scale = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = w * scale;
+    canvas.height = h * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.fillStyle = '#f5f6f8';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+
+    restoreClosed();
+
+    // 7. 下載
+    canvas.toBlob(blob => {
+      if (!blob) { showToast('產生 PNG 失敗（toBlob 為 null）'); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
+      a.download = '救護品管-AED校正-' + ts + '.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast('已儲存 PNG');
+    }, 'image/png');
+  } catch (err) {
+    console.error('PNG export error:', err);
+    restoreClosed();
+    // 失敗時改用列印對話框備援
+    if (confirm('PNG 匯出失敗：' + (err.message || err) + '\n\n要改用瀏覽器列印對話框（可儲存成 PDF/PNG）嗎？')) {
+      window.print();
+    }
+  } finally {
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+}
+document.getElementById('savePngBtn').addEventListener('click', captureToPng);
 
 /* 啟動 */
 recalcAll();
