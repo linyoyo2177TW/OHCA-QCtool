@@ -603,14 +603,19 @@ const v1Events = [
   { row: 13, label: '第一次 ROSC' },
 ];
 
-/// 👇 這裡修正：將 V2、V3、Zoll 共 6 個事件全部加入 isInput 標記
+// 👇 這裡修正：將 V2、V3 各自擴充為 4 個獨立的自訂輸入欄位，row 編號皆獨立
 const v2Events = [
   { row: 16, label: '請自行輸入事件時間點', isInput: true },
+  { row: 17, label: '請自行輸入事件時間點', isInput: true },
+  { row: 18, label: '請自行輸入事件時間點', isInput: true },
+  { row: 19, label: '請自行輸入事件時間點', isInput: true }
 ];
 
 const v3Events = [
   { row: 23, label: '請自行輸入事件時間點', isInput: true },
   { row: 24, label: '請自行輸入事件時間點', isInput: true },
+  { row: 25, label: '請自行輸入事件時間點', isInput: true },
+  { row: 26, label: '請自行輸入事件時間點', isInput: true }
 ];
 
 const zollEvents = [
@@ -1049,8 +1054,8 @@ async function captureToPng() {
     const H = {
       header: 70,
       v1: 38 + 70 + 10 * 28 + 16,
-      v2: 38 + 70 + 1 * 28 + 16,
-      v3: 38 + 70 + 2 * 28 + 16,
+      v2: 38 + 70 + 4 * 28 + 16,
+      v3: 38 + 70 + 4 * 28 + 16,
       zoll: 38 + 70 + 3 * 28 + 16,
       tic: 38 + 3 * 28 + 16 + 3 * 28 + 16,
       paste: 38 + 30 + 36 + 24 + 30 + 36 + 16,
