@@ -173,6 +173,15 @@
   <button class="secondary" id="demoBtn">載入示範資料</button>
   <button class="secondary" id="demoCrossBtn">載入跨日示範</button>
   <button class="primary" id="savePngBtn" title="把目前計算內容存成 PNG 圖檔">📷 儲存成圖檔</button>
+  <button class="primary" id="savePngZollBtn" title="同時截取 ZOLL Online 成效摘要頁面，合併成一張 PNG（會請瀏覽器詢問要分享哪個分頁；也可預先 Cmd+V 貼上 ZOLL 截圖）" style="background:#047857;">📸 含 ZOLL 一起儲存</button>
+</div>
+
+<div id="zollPreviewWrap" style="display:none; align-items:center; gap:12px; padding:10px 18px; background:#fffbeb; border-bottom:1px solid #fcd34d; flex-wrap:wrap;">
+  <span style="font-size:12.5px; color:#92400e; font-weight:600;">📋 已接收 ZOLL 截圖：</span>
+  <img id="zollPreviewImg" src="" style="height:54px; max-width:200px; object-fit:contain; border:1px solid #d4d4d8; border-radius:4px; background:#fff;">
+  <span id="zollPreviewSize" style="font-size:11.5px; color:#6b7280;"></span>
+  <span style="font-size:11.5px; color:#6b7280; flex:1; min-width:200px;">下次按「含 ZOLL 一起儲存」會直接用這張，不再跳分享畫面對話框。</span>
+  <button class="secondary" id="clearZollBtn">清除</button>
 </div>
 
 <main>
@@ -196,6 +205,41 @@
         <code>E_x = sec(C_x) − D3</code> ← 還原成 AED 時間<br>
         顯示時用 <code>mod 86400</code> 變回 0–24 小時的時鐘讀數，若計算結果落在隔日範圍會額外標 <span class="pill">隔日</span>。<br><br>
         <strong>結果格式：</strong>UI 與「轉貼用」皆為 24 小時 <code>h:mm:ss</code>，可直接貼進品管 Excel。
+      </div>
+    </details>
+  </section>
+
+  <!-- ZOLL 全頁截圖設定（每台電腦／每個瀏覽器第一次需要做一次） -->
+  <section class="card" id="zollSetupCard">
+    <details>
+      <summary>📸 ZOLL Online 整頁截圖設定（每個瀏覽器第一次要做一次，5 秒）</summary>
+      <div style="font-size:13px; line-height:1.7; color:#374151; padding:6px 4px;">
+        <p style="margin:0 0 10px;">因為瀏覽器安全限制，本工具沒辦法直接抓另一個分頁的整頁畫面。<strong>解法：用一個書籤</strong>，按一下就能在 ZOLL 那邊產生整頁 PNG，再拖回本工具即可。</p>
+
+        <div style="background:#fef3c7; border:1.5px solid #f59e0b; border-radius:8px; padding:14px 16px; margin:12px 0;">
+          <p style="margin:0 0 12px; font-size:13.5px;"><strong>① 把下面這顆綠色按鈕拖到瀏覽器書籤列：</strong></p>
+          <a id="zollBookmarklet" href="javascript:void(0)" draggable="true"
+             style="display:inline-block; padding:10px 22px; background:#047857; color:#fff !important; border-radius:6px; text-decoration:none; font-weight:600; font-size:14px; cursor:grab; user-select:none; box-shadow:0 2px 6px rgba(4,120,87,.3);">📸 ZOLL 整頁截圖</a>
+          <p style="margin:12px 0 0; font-size:11.5px; color:#6b7280;">看不到書籤列？按 <code style="background:#fff; padding:1px 5px; border-radius:3px;">Cmd + Shift + B</code> 顯示。或右鍵點按鈕 → 「加入書籤」也可以。</p>
+        </div>
+
+        <p style="margin:14px 0 6px;"><strong>② 之後每次使用：</strong></p>
+        <ol style="margin:0 0 12px 22px; padding:0;">
+          <li>在 ZOLL Online 開好要截的頁面（成效摘要、CPR 趨勢…）</li>
+          <li>點書籤列上那顆「📸 ZOLL 整頁截圖」</li>
+          <li>等幾秒看到「已下載」提示，PNG 會自動存到「下載」資料夾</li>
+          <li>把那張 PNG 拖回本工具網頁 → 按「📸 含 ZOLL 一起儲存」</li>
+        </ol>
+
+        <details style="margin-top:10px;">
+          <summary style="font-size:12.5px; color:#6b7280;">如果書籤不能用 / 公司限制 javascript: 書籤 — 改用瀏覽器原生功能</summary>
+          <ul style="margin:8px 0 0 20px; padding:0; font-size:12.5px; line-height:1.8;">
+            <li><strong>Chrome：</strong> 在 ZOLL 頁按 <code>Cmd+Option+I</code> 開 DevTools → <code>Cmd+Shift+P</code> → 輸入 <code>full size screenshot</code> → Enter</li>
+            <li><strong>Edge：</strong> 直接 <code>Cmd+Shift+S</code> → 選「擷取整頁」</li>
+            <li><strong>Firefox：</strong> 頁面右鍵 → 「擷取畫面」→ 「儲存整個頁面」</li>
+            <li><strong>Safari：</strong> 沒有原生整頁截圖，建議改用 Chrome / Edge 開 ZOLL</li>
+          </ul>
+        </details>
       </div>
     </details>
   </section>
@@ -957,13 +1001,11 @@ function showToast(msg) {
 /* =====================================================================
    匯出為 PNG — 直接用 Canvas 2D API 繪製
    ===================================================================== */
-async function captureToPng() {
-  const btn = document.getElementById('savePngBtn');
-  const origText = btn.textContent;
-  btn.textContent = '⏳ 產生中...'; btn.disabled = true;
+const DPR_OUT = 2;
 
-  try {
-    const dpr = 2;
+// 把 QC 內容畫到一個 canvas（不下載）。回傳 canvas。
+function drawQcCanvas() {
+    const dpr = DPR_OUT;
     const W = 1100;
     const PAD = 30;
     const innerW = W - PAD * 2;
@@ -1250,28 +1292,313 @@ async function captureToPng() {
     fnt(13, '', true);
     txt(ticCells[1] || '—', PAD + 16 + acW + 16 + acW/2, cy + 41, ticCells[1] ? COL.result : COL.muted, 'center');
 
+    return canvas;
+}
+
+/* ---------- 公用工具 ---------- */
+function makeTimestamp() {
+  return new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
+}
+
+function saveCanvasAsPng(canvas, filename) {
+  return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
-      if (!blob) { showToast('產生 PNG 失敗（toBlob 為 null）'); return; }
+      if (!blob) return reject(new Error('toBlob 為 null'));
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const ts = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
-      a.download = '救護品管-AED校正-' + ts + '.png';
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      showToast('已儲存 PNG');
+      resolve();
     }, 'image/png');
+  });
+}
+
+/* ---------- 只存 QC ---------- */
+async function captureToPng() {
+  const btn = document.getElementById('savePngBtn');
+  const origText = btn.textContent;
+  btn.textContent = '⏳ 產生中...'; btn.disabled = true;
+  try {
+    const c = drawQcCanvas();
+    await saveCanvasAsPng(c, '救護品管-AED校正-' + makeTimestamp() + '.png');
+    showToast('已儲存 PNG');
   } catch (err) {
     console.error('PNG export error:', err);
     showToast('儲存失敗：' + (err.message || err));
   } finally {
-    btn.textContent = origText;
-    btn.disabled = false;
+    btn.textContent = origText; btn.disabled = false;
   }
 }
+
+/* ---------- ZOLL 截圖：貼上/拖曳暫存區 ---------- */
+let __zollImg = null;       // Image 物件
+let __zollObjUrl = null;    // 對應的 ObjectURL（給預覽用，匯出後釋放）
+
+function setZollFromBlob(blob) {
+  if (!blob || !blob.type || !blob.type.startsWith('image/')) {
+    showToast('不是圖片檔'); return;
+  }
+  if (__zollObjUrl) { URL.revokeObjectURL(__zollObjUrl); __zollObjUrl = null; }
+  __zollObjUrl = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    __zollImg = img;
+    updateZollPreview();
+    showToast('已接收 ZOLL 截圖（' + img.naturalWidth + '×' + img.naturalHeight + '）');
+  };
+  img.onerror = () => { showToast('圖片載入失敗'); };
+  img.src = __zollObjUrl;
+}
+
+function clearZoll() {
+  __zollImg = null;
+  if (__zollObjUrl) { URL.revokeObjectURL(__zollObjUrl); __zollObjUrl = null; }
+  updateZollPreview();
+}
+
+function updateZollPreview() {
+  const wrap = document.getElementById('zollPreviewWrap');
+  const preview = document.getElementById('zollPreviewImg');
+  const size = document.getElementById('zollPreviewSize');
+  if (__zollImg) {
+    preview.src = __zollImg.src;
+    size.textContent = __zollImg.naturalWidth + '×' + __zollImg.naturalHeight + ' px';
+    wrap.style.display = 'flex';
+  } else {
+    preview.src = '';
+    size.textContent = '';
+    wrap.style.display = 'none';
+  }
+}
+
+/* ---------- 取得 ZOLL 圖：有暫存就用、否則叫 getDisplayMedia ---------- */
+async function getZollImage() {
+  if (__zollImg) return __zollImg;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    throw new Error('此瀏覽器不支援螢幕分享 API，請改用 Cmd+V 貼上 ZOLL 截圖');
+  }
+  // 提示使用者要選 ZOLL 那個分頁
+  showToast('請在瀏覽器對話框中選擇 ZOLL Online 分頁');
+  const stream = await navigator.mediaDevices.getDisplayMedia({
+    video: { cursor: 'never' },
+    audio: false
+  });
+  try {
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.muted = true;
+    video.playsInline = true;
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = () => video.play().then(resolve).catch(reject);
+      setTimeout(() => reject(new Error('影像載入逾時')), 8000);
+    });
+    // 再多等一個 frame 讓畫面實際進來
+    await new Promise(r => setTimeout(r, 200));
+    const w = video.videoWidth, h = video.videoHeight;
+    if (!w || !h) throw new Error('未取得分享畫面尺寸');
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(video, 0, 0, w, h);
+    // 轉成 Image
+    const blob = await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('截圖 toBlob 失敗')), 'image/png'));
+    const url = URL.createObjectURL(blob);
+    const img = await new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = rej;
+      im.src = url;
+    });
+    return img;
+  } finally {
+    stream.getTracks().forEach(t => t.stop());
+  }
+}
+
+/* ---------- 把 QC + ZOLL 合併成一張 canvas ---------- */
+function compositeQcZoll(qcCanvas, zollImg) {
+  const dpr = DPR_OUT;
+  const W = qcCanvas.width;          // 已是 2x DPR
+  const labelH = 60 * dpr;            // 中間分隔條高
+  const margin = 20 * dpr;
+  const scale = W / zollImg.naturalWidth;
+  const zollH = zollImg.naturalHeight * scale;
+  const totalH = qcCanvas.height + labelH + zollH + margin;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = totalH;
+  const ctx = c.getContext('2d');
+
+  // 背景
+  ctx.fillStyle = '#f5f6f8';
+  ctx.fillRect(0, 0, W, totalH);
+
+  // QC 在上
+  ctx.drawImage(qcCanvas, 0, 0);
+
+  // 分隔條（深綠底白字標題）
+  const sepY = qcCanvas.height;
+  ctx.fillStyle = '#047857';
+  ctx.fillRect(0, sepY, W, labelH);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '600 ' + (22 * dpr) + 'px "PingFang TC", "Microsoft JhengHei", -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('ZOLL Online — 成效摘要', W / 2, sepY + labelH / 2);
+
+  // ZOLL 在下，居中
+  ctx.drawImage(zollImg, 0, sepY + labelH, W, zollH);
+
+  return c;
+}
+
+/* ---------- 含 ZOLL 一起儲存 ---------- */
+async function captureWithZoll() {
+  const btn = document.getElementById('savePngZollBtn');
+  const origText = btn.textContent;
+  btn.disabled = true;
+  try {
+    btn.textContent = __zollImg ? '⏳ 合併中...' : '⏳ 等待選擇分頁...';
+    const qc = drawQcCanvas();
+    let zollImg;
+    try {
+      zollImg = await getZollImage();
+    } catch (err) {
+      console.warn('ZOLL 截圖失敗：', err);
+      if (err && (err.name === 'NotAllowedError' || (err.message || '').includes('denied'))) {
+        showToast('已取消畫面分享。可改用 Cmd+Ctrl+Shift+4 截圖到剪貼簿後 Cmd+V 貼上');
+      } else {
+        showToast('無法取得 ZOLL 截圖：' + (err.message || err));
+      }
+      return;
+    }
+    btn.textContent = '⏳ 合併中...';
+    const combined = compositeQcZoll(qc, zollImg);
+    await saveCanvasAsPng(combined, '救護品管-AED校正含ZOLL-' + makeTimestamp() + '.png');
+    showToast('已儲存合併 PNG');
+    // 用完後清掉暫存，避免下次誤用舊圖
+    clearZoll();
+  } catch (err) {
+    console.error('合併匯出失敗：', err);
+    showToast('儲存失敗：' + (err.message || err));
+  } finally {
+    btn.textContent = origText; btn.disabled = false;
+  }
+}
+
+/* ---------- 全域 paste / drag-drop 監聽 ---------- */
+document.addEventListener('paste', (e) => {
+  // 在輸入框內貼上文字時，不要攔截
+  const tgt = e.target;
+  const inEditable = tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA');
+  if (!e.clipboardData) return;
+  for (const it of e.clipboardData.items) {
+    if (it.kind === 'file' && (it.type || '').startsWith('image/')) {
+      const f = it.getAsFile();
+      if (f) {
+        if (inEditable) e.preventDefault();
+        setZollFromBlob(f);
+        return;
+      }
+    }
+  }
+});
+// 允許整頁 drag-drop 圖檔
+['dragover', 'dragenter'].forEach(ev => {
+  document.addEventListener(ev, (e) => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) {
+      e.preventDefault();
+    }
+  });
+});
+document.addEventListener('drop', (e) => {
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+    e.preventDefault();
+    const f = e.dataTransfer.files[0];
+    if (f && f.type && f.type.startsWith('image/')) setZollFromBlob(f);
+  }
+});
+
+document.getElementById('clearZollBtn').addEventListener('click', clearZoll);
 document.getElementById('savePngBtn').addEventListener('click', captureToPng);
+document.getElementById('savePngZollBtn').addEventListener('click', captureWithZoll);
+
+/* =====================================================================
+   ZOLL 整頁截圖 bookmarklet：把實際的 javascript: URL 注入 <a> 的 href
+   ===================================================================== */
+(function setupZollBookmarklet() {
+  // 這段是 bookmarklet 真正會跑的程式。點書籤後在 ZOLL 頁面執行：
+  //   1) 顯示一個浮動狀態框
+  //   2) 動態載入 html2canvas（從 cdnjs）
+  //   3) 把整個 documentElement 渲染成 canvas（用實際 scrollHeight）
+  //   4) 轉 PNG 下載；檔名帶時間戳
+  const bmCode = `(function(){
+    if (window.__zollCap) return;
+    window.__zollCap = 1;
+    var m = document.createElement('div');
+    m.style.cssText = 'position:fixed;top:20px;right:20px;z-index:2147483647;background:#1f2937;color:#fff;padding:12px 18px;border-radius:8px;font:14px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.35);max-width:340px;line-height:1.4';
+    m.textContent = '\\u{1F4F8} \\u8f09\\u5165\\u622a\\u5716\\u5de5\\u5177...';
+    document.body.appendChild(m);
+    function done(ok, txt) {
+      m.style.background = ok ? '#047857' : '#b91c1c';
+      m.textContent = txt;
+      setTimeout(function(){ m.remove(); window.__zollCap = 0; }, ok ? 3000 : 5000);
+    }
+    function go() {
+      m.textContent = '\\u{1F4F8} \\u6e32\\u67d3\\u6574\\u9801\\u4e2d\\uff0c\\u8acb\\u7a0d\\u5019...';
+      var de = document.documentElement, bo = document.body;
+      var W = Math.max(de.scrollWidth, bo.scrollWidth, window.innerWidth);
+      var H = Math.max(de.scrollHeight, bo.scrollHeight);
+      try {
+        window.html2canvas(de, {
+          width: W, height: H, windowWidth: W, windowHeight: H,
+          scale: 1.5, useCORS: true, allowTaint: false,
+          logging: false, backgroundColor: '#ffffff',
+          scrollX: 0, scrollY: 0, x: 0, y: 0
+        }).then(function(c){
+          c.toBlob(function(b){
+            if (!b) return done(false, '\\u274C \\u532f\\u51fa\\u5931\\u6557\\uff08toBlob null\\uff09');
+            var u = URL.createObjectURL(b);
+            var a = document.createElement('a');
+            a.href = u;
+            var t = new Date().toISOString().replace(/[:T]/g,'-').slice(0,16);
+            a.download = 'ZOLL\\u6210\\u6548\\u6458\\u8981-' + t + '.png';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(function(){ URL.revokeObjectURL(u); }, 1500);
+            done(true, '\\u2705 \\u5df2\\u4e0b\\u8f09\\uff08' + c.width + '\\u00D7' + c.height + '\\uff09\\uFF0C\\u8acb\\u62d6\\u5230\\u54c1\\u7ba1\\u5de5\\u5177');
+          }, 'image/png');
+        }).catch(function(e){
+          done(false, '\\u274C \\u622a\\u5716\\u5931\\u6557\\uff1a' + (e && e.message ? e.message : String(e)));
+        });
+      } catch(e) {
+        done(false, '\\u274C \\u57f7\\u884c\\u5931\\u6557\\uff1a' + (e && e.message ? e.message : String(e)));
+      }
+    }
+    if (window.html2canvas) return go();
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.crossOrigin = 'anonymous';
+    s.onload = go;
+    s.onerror = function(){ done(false, '\\u274C \\u7121\\u6cd5\\u8f09\\u5165 html2canvas\\uff0c\\u8acb\\u6aa2\\u67e5\\u7db2\\u8def'); };
+    document.head.appendChild(s);
+  })();`;
+
+  // 把多餘空白壓掉並 encode 成 javascript: URL
+  const minified = bmCode.replace(/\s+/g, ' ').trim();
+  const href = 'javascript:' + encodeURIComponent(minified);
+  const a = document.getElementById('zollBookmarklet');
+  if (a) {
+    a.setAttribute('href', href);
+    // 點擊時提示使用者：這顆應該拖到書籤列，不是現在點
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      showToast('請把這顆按鈕拖到書籤列；之後在 ZOLL 頁面點該書籤才會截圖');
+    });
+  }
+})();
 
 /* 啟動 */
 recalcAll();
